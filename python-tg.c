@@ -28,6 +28,7 @@
 
 #include <string.h>
 #include <stdlib.h>
+#include <libgen.h>
 
 
 #include <Python.h>
@@ -1271,24 +1272,33 @@ void inittgl()
 
 void py_init (const char *file) {
   if (!file) { return; }
-  have_file = 1;
 
   PyObject *pName, *pModule, *pDict;
   
   Py_Initialize();
   inittgl();
 
-
   PyObject* sysPath = PySys_GetObject((char*)"path");
-  PyList_Append(sysPath, PyString_FromString("."));
-
-
-  pName = PyString_FromString(file);
-  pModule = PyImport_Import(pName);
-  if (pModule == NULL)
+  char file_path[1024];
+  strncpy(file_path, file, sizeof(file_path));
+  PyList_Append(sysPath, PyString_FromString(dirname(file_path)));
+  // remove .py extension from file, if any
+  strncpy(file_path, file, sizeof(file_path));
+  char* dot = strrchr(file_path, '.');
+  if (dot && strcmp(dot, ".py") == 0) 
+      *dot = 0;
+  printf("file_path = %s\n", file_path);
+  printf("basename(file_path) = %s\n", basename(file_path));
+  pModule = PyImport_Import(PyString_FromString(basename(file_path)));
+  if (pModule == NULL) {
     PyErr_Print();
-  pDict = PyModule_GetDict(pModule);
+    Py_Finalize();
+    return;
+  }
 
+  have_file = 1;
+
+  pDict = PyModule_GetDict(pModule);
 
   // Store callables for python functions
   my_python_register(pDict, "on_binlog_replay_end", _py_binlog_end);
