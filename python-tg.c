@@ -342,6 +342,102 @@ PyObject* get_media (struct tgl_message_media *M) {
   return media;
 }
 
+
+PyObject* get_service (struct tgl_message* M) {
+  assert (M);
+  PyObject *msg;
+
+  msg = PyDict_New();
+  if(msg == NULL)
+    assert(0); // TODO handle python exception
+
+  // TODO
+  switch (M->action.type) {
+  case tgl_message_action_geo_chat_create:
+    py_add_string_field (msg, "type", "geo_created");
+    break;
+  case tgl_message_action_geo_chat_checkin:
+    py_add_string_field (msg, "type", "geo_checkin");
+    break;
+  case tgl_message_action_chat_create:
+    py_add_string_field (msg, "type", "chat_created");
+    py_add_string_field (msg, "title", M->action.title);
+    break;
+  case tgl_message_action_chat_edit_title:
+    py_add_string_field (msg, "type", "chat_rename");
+    py_add_string_field (msg, "title", M->action.title);
+    break;
+  case tgl_message_action_chat_edit_photo:
+    py_add_string_field (msg, "type", "chat_change_photo");
+    break;
+  case tgl_message_action_chat_delete_photo:
+    py_add_string_field (msg, "type", "chat_delete_photo");
+    break;
+  case tgl_message_action_chat_add_user:
+    py_add_string_field (msg, "type", "chat_add_user");
+    PyDict_SetItemString(msg, "user", get_peer(M->action.user, tgl_peer_get (TLS, M->action.user)));
+    break;
+  case tgl_message_action_chat_add_user_by_link:
+    py_add_string_field (msg, "type", "chat_add_user_link");
+    PyDict_SetItemString(msg, "link_issuer", get_peer(M->action.user, tgl_peer_get (TLS, M->action.user)));
+    break;
+  case tgl_message_action_chat_delete_user:
+    py_add_string_field (msg, "type", "chat_del_user");
+    PyDict_SetItemString(msg, "user", get_peer(M->action.user, tgl_peer_get (TLS, M->action.user)));
+    break;
+  case tgl_message_action_set_message_ttl:
+    py_add_string_field (msg, "type", "set_ttl");
+    py_add_num_field (msg, "ttl", M->action.ttl);
+    break;
+  case tgl_message_action_read_messages:
+    py_add_string_field (msg, "type", "read");
+    py_add_num_field (msg, "count", M->action.read_count);
+    break;
+  case tgl_message_action_delete_messages:
+    py_add_string_field (msg, "type", "delete");
+    py_add_num_field (msg, "count", M->action.delete_count);
+    break;
+  case tgl_message_action_screenshot_messages:
+    py_add_string_field (msg, "type", "screenshot");
+    py_add_num_field (msg, "count", M->action.screenshot_count);
+    break;
+  case tgl_message_action_flush_history:
+    py_add_string_field (msg, "type", "flush");
+    break;
+  case tgl_message_action_resend:
+    py_add_string_field (msg, "type", "resend");
+    break;
+  case tgl_message_action_notify_layer:
+    py_add_string_field (msg, "type", "set_layer");
+    py_add_num_field (msg, "layer", M->action.layer);
+    break;
+  case tgl_message_action_typing:    
+    py_add_string_field (msg, "type", "typing");
+    break;
+  case tgl_message_action_noop:
+    py_add_string_field (msg, "type", "nop");
+    break;
+  case tgl_message_action_request_key:
+    py_add_string_field (msg, "type", "request_rekey");
+    break;
+  case tgl_message_action_accept_key:
+    py_add_string_field (msg, "type", "accept_rekey");
+    break;
+  case tgl_message_action_commit_key:
+    py_add_string_field (msg, "type", "commit_rekey");
+    break;
+  case tgl_message_action_abort_key:
+    py_add_string_field (msg, "type", "abort_rekey");
+    break;
+  default:
+    py_add_string_field (msg, "type", "???");
+    break;
+  }
+
+  return msg;
+}
+
+
 PyObject* get_message (struct tgl_message *M) {  
   assert (M);
   PyObject *msg;
@@ -353,8 +449,14 @@ PyObject* get_message (struct tgl_message *M) {
   static char s[30];
   snprintf (s, 30, "%lld", M->id);
   py_add_string_field (msg, "id", s);
-  if (!(M->flags & FLAG_CREATED)) { return msg; }
+  if (!(M->flags & FLAG_CREATED)) { 
+    return msg; 
+  }
+
   py_add_num_field (msg, "flags", M->flags);
+  if (M->flags & TGLMF_MENTION) {
+    PyDict_SetItemString(msg, "mention", Py_True);
+  }
 
 #if 0
   if (M->reply_id) {
@@ -373,18 +475,20 @@ PyObject* get_message (struct tgl_message *M) {
  
   PyDict_SetItemString(msg, "from",    get_peer(M->from_id, tgl_peer_get (TLS, M->from_id)));
   PyDict_SetItemString(msg, "to",      get_peer(M->to_id, tgl_peer_get (TLS, M->to_id)));
-  PyDict_SetItemString(msg, "out",     (M->out ? Py_True : Py_False));
-  PyDict_SetItemString(msg, "unread",  (M->unread ? Py_True : Py_False));
-  PyDict_SetItemString(msg, "service", (M->service ? Py_True : Py_False));
+  PyDict_SetItemString(msg, "out",     ((M->flags & TGLMF_OUT) != 0)(M->out ? Py_True : Py_False));
+  PyDict_SetItemString(msg, "unread",  ((M->flags & TGLMF_UNREAD) != 0) ? Py_True : Py_False));
+  PyDict_SetItemString(msg, "service", ((M->flags & TGLMF_SERVICE) != 0)(M->service ? Py_True : Py_False));
   PyDict_SetItemString(msg, "date",    PyLong_FromLong(M->date)); // TODO put this into PyDate object
 
-  if (!M->service) { 
+  if (!(M->flags & TGLMF_SERVICE)) {  
     if (M->message_len && M->message) {
       PyDict_SetItemString(msg, "text", PyString_FromStringAndSize(M->message, M->message_len));
     }
     if (M->media.type && M->media.type != tgl_message_media_none) {
       PyDict_SetItemString(msg, "media", get_media(&M->media));  
     }
+  } else {
+    PyDict_SetItemString(msg, "action", get_service(M));  
   }
 
   return msg;
