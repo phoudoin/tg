@@ -654,12 +654,12 @@ void args_parse (int argc, char **argv) {
       lua_file = strdup (optarg);
       break;
 #endif
-    case 'W':
 #ifdef USE_PYTHON
     case 'Z':
       python_file = strdup (optarg);
       break;
 #endif
+    case 'W':
       wait_dialog_list = 1;
       break;
     case 'C':
