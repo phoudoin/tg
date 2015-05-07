@@ -109,6 +109,7 @@ void (*on_string_cb)(struct tgl_state *TLS, char *str, void *arg);
 void *string_cb_arg;
 char *one_string_prompt;
 int one_string_flags;
+extern int disable_link_preview;
 
 void deactivate_readline (void);
 void reactivate_readline (void);
@@ -349,7 +350,7 @@ void write_dc (struct tgl_dc *DC, void *extra) {
     assert (write (auth_file_fd, &x, 4) == 4);
   }
 
-  assert (DC->has_auth);
+  assert (DC->flags & TGLDCF_LOGGED_IN);
 
   assert (write (auth_file_fd, &DC->port, 4) == 4);
   int l = strlen (DC->ip);
@@ -440,24 +441,24 @@ void read_dc (int auth_file_fd, int id, unsigned ver) {
   assert (read (auth_file_fd, auth_key, 256) == 256);
 
   //bl_do_add_dc (id, ip, l, port, auth_key_id, auth_key);
-  bl_do_dc_option (TLS, id, 2, "DC", l, ip, port);
-  bl_do_set_auth_key_id (TLS, id, auth_key);
+  bl_do_dc_option (TLS, id, "DC", 2, ip, l, port);
+  bl_do_set_auth_key (TLS, id, auth_key);
   bl_do_dc_signed (TLS, id);
 }
 
 void empty_auth_file (void) {
   if (TLS->test_mode) {
-    bl_do_dc_option (TLS, 1, 0, "", strlen (TG_SERVER_TEST_1), TG_SERVER_TEST_1, 443);
-    bl_do_dc_option (TLS, 2, 0, "", strlen (TG_SERVER_TEST_2), TG_SERVER_TEST_2, 443);
-    bl_do_dc_option (TLS, 3, 0, "", strlen (TG_SERVER_TEST_3), TG_SERVER_TEST_3, 443);
-    bl_do_set_working_dc (TLS, 2);
+    bl_do_dc_option (TLS, 1, "", 0, TG_SERVER_TEST_1, strlen (TG_SERVER_TEST_1), 443);
+    bl_do_dc_option (TLS, 2, "", 0, TG_SERVER_TEST_2, strlen (TG_SERVER_TEST_2), 443);
+    bl_do_dc_option (TLS, 3, "", 0, TG_SERVER_TEST_3, strlen (TG_SERVER_TEST_3), 443);
+    bl_do_set_working_dc (TLS, TG_SERVER_TEST_DEFAULT);
   } else {
-    bl_do_dc_option (TLS, 1, 0, "", strlen (TG_SERVER_1), TG_SERVER_1, 443);
-    bl_do_dc_option (TLS, 2, 0, "", strlen (TG_SERVER_2), TG_SERVER_2, 443);
-    bl_do_dc_option (TLS, 3, 0, "", strlen (TG_SERVER_3), TG_SERVER_3, 443);
-    bl_do_dc_option (TLS, 4, 0, "", strlen (TG_SERVER_4), TG_SERVER_4, 443);
-    bl_do_dc_option (TLS, 5, 0, "", strlen (TG_SERVER_5), TG_SERVER_5, 443);
-    bl_do_set_working_dc (TLS, 4);
+    bl_do_dc_option (TLS, 1, "", 0, TG_SERVER_1, strlen (TG_SERVER_1), 443);
+    bl_do_dc_option (TLS, 2, "", 0, TG_SERVER_2, strlen (TG_SERVER_2), 443);
+    bl_do_dc_option (TLS, 3, "", 0, TG_SERVER_3, strlen (TG_SERVER_3), 443);
+    bl_do_dc_option (TLS, 4, "", 0, TG_SERVER_4, strlen (TG_SERVER_4), 443);
+    bl_do_dc_option (TLS, 5, "", 0, TG_SERVER_5, strlen (TG_SERVER_5), 443);
+    bl_do_set_working_dc (TLS, TG_SERVER_DEFAULT);
   }
 }
 
@@ -524,6 +525,8 @@ void read_secret_chat (int fd, int v) {
   assert (read (fd, &key, 256) == 256);
   if (v >= 2) {
     assert (read (fd, sha, 20) == 20);
+  } else {
+    SHA1 ((void *)key, 256, sha);
   }
   int in_seq_no = 0, out_seq_no = 0, last_in_seq_no = 0;
   if (v >= 1) {
@@ -532,24 +535,24 @@ void read_secret_chat (int fd, int v) {
     assert (read (fd, &out_seq_no, 4) == 4);
   }
 
-  bl_do_encr_chat_create (TLS, id, user_id, admin_id, s, l);
-  struct tgl_secret_chat  *P = (void *)tgl_peer_get (TLS, TGL_MK_ENCR_CHAT (id));
-  assert (P && (P->flags & FLAG_CREATED));
-  bl_do_encr_chat_set_date (TLS, P, date);
-  bl_do_encr_chat_set_ttl (TLS, P, ttl);
-  bl_do_encr_chat_set_layer (TLS ,P, layer);
-  bl_do_encr_chat_set_access_hash (TLS, P, access_hash);
-  bl_do_encr_chat_set_state (TLS, P, state);
-  bl_do_encr_chat_set_key (TLS, P, key, key_fingerprint);
-  if (v >= 2) {
-    bl_do_encr_chat_set_sha (TLS, P, sha);
-  } else {
-    SHA1 ((void *)key, 256, sha);
-    bl_do_encr_chat_set_sha (TLS, P, sha);
-  }
-  if (v >= 1) {
-    bl_do_encr_chat_set_seq (TLS, P, in_seq_no, last_in_seq_no, out_seq_no);
-  }
+  bl_do_encr_chat_new (TLS, id, 
+    &access_hash,
+    &date,
+    &admin_id,
+    &user_id,
+    key,
+    NULL,
+    sha,
+    &state,
+    &ttl,
+    &layer,
+    &in_seq_no,
+    &last_in_seq_no,
+    &out_seq_no,
+    &key_fingerprint,
+    TGLECF_CREATE | TGLECF_CREATED
+  );
+    
 }
 
 void read_secret_chat_file (void) {
@@ -650,7 +653,8 @@ void dlist_cb (struct tgl_state *TLSR, void *callback_extra, int success, int si
 void on_started (struct tgl_state *TLS) {
   if (wait_dialog_list) {
     wait_dialog_list = 0;
-    tgl_do_get_dialog_list (TLS, dlist_cb, 0);
+    tgl_do_get_dialog_list (TLS, 100, 0, dlist_cb, 0);
+    return;
   }
   #ifdef USE_LUA
     lua_diff_end ();
@@ -684,6 +688,9 @@ int loop (void) {
   tgl_set_app_version (TLS, "Telegram-cli " TELEGRAM_CLI_VERSION);
   if (ipv6_enabled) {
     tgl_enable_ipv6 (TLS);
+  }
+  if (disable_link_preview) {
+    tgl_disable_link_preview (TLS);
   }
   tgl_init (TLS);
  
