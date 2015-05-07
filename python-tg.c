@@ -482,9 +482,9 @@ PyObject* get_message (struct tgl_message *M) {
  
   PyDict_SetItemString(msg, "from",    get_peer(M->from_id, tgl_peer_get (TLS, M->from_id)));
   PyDict_SetItemString(msg, "to",      get_peer(M->to_id, tgl_peer_get (TLS, M->to_id)));
-  PyDict_SetItemString(msg, "out",     ((M->flags & TGLMF_OUT) != 0)(M->out ? Py_True : Py_False));
-  PyDict_SetItemString(msg, "unread",  ((M->flags & TGLMF_UNREAD) != 0) ? Py_True : Py_False));
-  PyDict_SetItemString(msg, "service", ((M->flags & TGLMF_SERVICE) != 0)(M->service ? Py_True : Py_False));
+  PyDict_SetItemString(msg, "out",     ((M->flags & TGLMF_OUT) != 0) ? Py_True : Py_False);
+  PyDict_SetItemString(msg, "unread",  ((M->flags & TGLMF_UNREAD) != 0) ? Py_True : Py_False);
+  PyDict_SetItemString(msg, "service", ((M->flags & TGLMF_SERVICE) != 0) ? Py_True : Py_False);
   PyDict_SetItemString(msg, "date",    PyLong_FromLong(M->date)); // TODO put this into PyDate object
 
   if (!(M->flags & TGLMF_SERVICE)) {  
