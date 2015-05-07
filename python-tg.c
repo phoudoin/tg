@@ -305,17 +305,8 @@ PyObject* get_media (struct tgl_message_media *M) {
   case tgl_message_media_photo:
   case tgl_message_media_photo_encr:
     py_add_string_field (media, "type", "photo");
+    py_add_string_field (media, "caption", M->caption);
     break;
-  /*case tgl_message_media_video:
-  case tgl_message_media_video_encr:
-    lua_newtable (luaState);
-    lua_add_string_field ("type", "video");
-    break;
-  case tgl_message_media_audio:
-  case tgl_message_media_audio_encr:
-    lua_newtable (luaState);
-    lua_add_string_field ("type", "audio");
-    break;*/
   case tgl_message_media_document:
   case tgl_message_media_document_encr:
     py_add_string_field (media, "type", "document");
@@ -334,6 +325,22 @@ PyObject* get_media (struct tgl_message_media *M) {
     py_add_string_field (media, "first_name", M->first_name);
     py_add_string_field (media, "last_name", M->last_name);
     py_add_num_field (media, "user_id", M->user_id);
+    break;
+  case tgl_message_media_webpage:
+    py_add_string_field (media, "type", "webpage");
+    py_add_string_field (media, "url", M->webpage->url);
+    py_add_string_field (media, "title", M->webpage->title);
+    py_add_string_field (media, "description", M->webpage->description);
+    py_add_string_field (media, "author", M->webpage->author);
+    break;
+  case tgl_message_media_venue:
+    py_add_string_field (media, "type", "venue");
+    py_add_num_field (media, "longitude", M->venue.geo.longitude);
+    py_add_num_field (media, "latitude", M->venue.geo.latitude);
+    py_add_string_field (media, "title", M->venue.title);
+    py_add_string_field (media, "address", M->venue.address);
+    py_add_string_field (media, "provider", M->venue.provider);
+    py_add_string_field (media, "venue_id", M->venue.venue_id);
     break;
   default:
     py_add_string_field (media, "type", "unknown");
